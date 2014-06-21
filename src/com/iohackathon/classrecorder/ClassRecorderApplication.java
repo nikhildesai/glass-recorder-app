@@ -4,14 +4,14 @@ import android.app.Application;
 
 public class ClassRecorderApplication extends Application {
 
-    private static long lectureId;
+    private static String lectureId;
     private static long lectureStartTime;
 
-    public static synchronized long getLectureId() {
+    public static synchronized String getLectureId() {
         return lectureId;
     }
 
-    public static synchronized void setLectureId(long lectureId) {
+    public static synchronized void setLectureId(String lectureId) {
         ClassRecorderApplication.lectureId = lectureId;
     }
 

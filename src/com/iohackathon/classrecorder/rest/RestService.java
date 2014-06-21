@@ -1,31 +1,34 @@
 package com.iohackathon.classrecorder.rest;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLConnection;
+import java.io.RandomAccessFile;
+
+import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.mime.HttpMultipartMode;
+import org.apache.http.entity.mime.MultipartEntity;
+import org.apache.http.entity.mime.content.ByteArrayBody;
+import org.apache.http.entity.mime.content.FileBody;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.os.AsyncTask;
+import android.util.Log;
 
 import com.iohackathon.classrecorder.ClassRecorderApplication;
 
 public class RestService implements RestServiceIF {
-    private final String baseUrl = "http://192.168.43.109:1337/";
+    private final String baseUrl = "http://107.170.247.99:1337";
     private final String boundary = "===***===";
     private static final String LINE_FEED = "\r\n";
     private static RestService restService;
+    private final String TAG = "RestService";
 
     private RestService() {
 
@@ -54,180 +57,88 @@ public class RestService implements RestServiceIF {
 
         @Override
         protected String doInBackground(String... params) {
-
-            URL url = null;
+            HttpClient cli = new DefaultHttpClient();
+            HttpPost post = new HttpPost(baseUrl + "/lecture/create");
+            MultipartEntity entity = new MultipartEntity();
             try {
-                url = new URL(baseUrl + "/lecture/create");
-            } catch (MalformedURLException e1) {
-                e1.printStackTrace();
+                RandomAccessFile f = new RandomAccessFile(new File(params[0]), "r");
+                byte[] b = new byte[(int) f.length()];
+                f.read(b);
+                ByteArrayBody byteArrayBody = new ByteArrayBody(b, "audio");
+                entity.addPart("audio", byteArrayBody);
+                post.setEntity(entity);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            HttpURLConnection urlConnection = null;
+            post.setEntity(entity);
+            HttpResponse httpResponse = null;
             try {
-                urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("POST");
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
-            try {
-                urlConnection.setDoOutput(true);
-                urlConnection.setChunkedStreamingMode(0);
-
-                OutputStream out = null;
-                try {
-                    out = new BufferedOutputStream(urlConnection.getOutputStream());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                writeStream(out, params[0]);
-
-                InputStream in = null;
-                try {
-                    in = new BufferedInputStream(urlConnection.getInputStream());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                readStream(in);
+                httpResponse = cli.execute(post);
+            } catch (ClientProtocolException e) {
+                e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
-            } finally {
-                urlConnection.disconnect();
+            }
+            JSONObject jsonObject;
+
+            try {
+                String inputLine = null;
+                BufferedReader in = null;
+                try {
+                    in = new BufferedReader(new InputStreamReader(httpResponse.getEntity().getContent()));
+                } catch (IllegalStateException e1) {
+                    e1.printStackTrace();
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
+
+                StringBuffer buffer = new StringBuffer();
+                try {
+                    while ((inputLine = in.readLine()) != null) {
+                        buffer.append(inputLine);
+                    }
+                    in.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                String responseString = buffer.toString();
+                Log.d(TAG, responseString);
+                jsonObject = new JSONObject(responseString);
+                ClassRecorderApplication.setLectureId((String) jsonObject.get("id"));
+                Log.d(TAG, "lecture id=" + ClassRecorderApplication.getLectureId());
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+            } catch (JSONException e) {
+                e.printStackTrace();
             }
             return null;
         }
-
-        private void readStream(InputStream in) throws IOException {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-            String line = null;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
-            }
-            reader.close();
-        }
-
-        private void writeStream(OutputStream out, String audioFileUrl) {
-            try {
-                PrintWriter writer = new PrintWriter(new OutputStreamWriter(out, "UTF-8"), true);
-                addFilePart(writer, new File(audioFileUrl), out);
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-        public void addFilePart(PrintWriter writer, File uploadFile, OutputStream outputStream) throws IOException {
-            String fileName = uploadFile.getName();
-            writer.append("--" + boundary).append(LINE_FEED);
-            writer.append("Content-Disposition: form-data; \"; filename=\"" + fileName + "\"").append(LINE_FEED);
-            writer.append("Content-Type: " + URLConnection.guessContentTypeFromName(fileName)).append(LINE_FEED);
-            writer.append("Content-Transfer-Encoding: binary").append(LINE_FEED);
-            writer.append(LINE_FEED);
-            writer.flush();
-
-            FileInputStream inputStream = new FileInputStream(uploadFile);
-            byte[] buffer = new byte[4096];
-            int bytesRead = -1;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-            outputStream.flush();
-            inputStream.close();
-
-            writer.append(LINE_FEED);
-            writer.flush();
-        }
-
     }
 
     class AddPhotoTask extends AsyncTask<Object, String, String> {
 
         @Override
         protected String doInBackground(Object... params) {
-
-            URL url = null;
+            HttpClient cli = new DefaultHttpClient();
+            HttpPost post = new HttpPost(baseUrl + "/lecture/add_photo/" + ClassRecorderApplication.getLectureId());
+            MultipartEntity reqEntity = new MultipartEntity(HttpMultipartMode.BROWSER_COMPATIBLE);
             try {
-                url = new URL(baseUrl + "/lecture/add_photo/" + ClassRecorderApplication.getLectureId());
-            } catch (MalformedURLException e1) {
-                e1.printStackTrace();
+                MultipartEntity entity = new MultipartEntity();
+                entity.addPart("photo", new FileBody(new File((String) params[0])));
+                post.setEntity(entity);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            HttpURLConnection urlConnection = null;
+            post.setEntity(reqEntity);
+            HttpResponse httpResponse = null;
             try {
-                urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("POST");
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
-            try {
-                urlConnection.setDoOutput(true);
-                urlConnection.setChunkedStreamingMode(0);
-
-                OutputStream out = null;
-                try {
-                    out = new BufferedOutputStream(urlConnection.getOutputStream());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                writeStream(out, (String) params[0], (Long) params[1]);
-
-                InputStream in = null;
-                try {
-                    in = new BufferedInputStream(urlConnection.getInputStream());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                readStream(in);
+                httpResponse = cli.execute(post);
+            } catch (ClientProtocolException e) {
+                e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
-            } finally {
-                urlConnection.disconnect();
             }
             return null;
-        }
-
-        private void readStream(InputStream in) throws IOException {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
-            String line = null;
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
-            }
-            reader.close();
-        }
-
-        private void writeStream(OutputStream out, String audioFileUrl, long offset) {
-            try {
-                PrintWriter writer = new PrintWriter(new OutputStreamWriter(out, "UTF-8"), true);
-                addFilePart(writer, new File(audioFileUrl), out, offset);
-            } catch (UnsupportedEncodingException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
-        }
-
-        public void addFilePart(PrintWriter writer, File uploadFile, OutputStream outputStream, long offset)
-                throws IOException {
-            String fileName = uploadFile.getName();
-            writer.append("--" + boundary).append(LINE_FEED);
-            writer.append("Content-Disposition: form-data; timeStamp=\"" + offset + "\"; filename=\"" + fileName + "\"")
-                    .append(LINE_FEED);
-            writer.append("Content-Type: " + URLConnection.guessContentTypeFromName(fileName)).append(LINE_FEED);
-            writer.append("Content-Transfer-Encoding: binary").append(LINE_FEED);
-            writer.append(LINE_FEED);
-            writer.flush();
-
-            FileInputStream inputStream = new FileInputStream(uploadFile);
-            byte[] buffer = new byte[4096];
-            int bytesRead = -1;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-            outputStream.flush();
-            inputStream.close();
-
-            writer.append(LINE_FEED);
-            writer.flush();
         }
 
     }
