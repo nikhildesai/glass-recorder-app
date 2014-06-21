@@ -17,6 +17,7 @@ import android.widget.RemoteViews;
 
 import com.google.android.glass.timeline.LiveCard;
 import com.google.android.glass.timeline.LiveCard.PublishMode;
+import com.iohackathon.classrecorder.GlassRecorderApplication.ImageInfo;
 import com.iohackathon.classrecorder.rest.RestService;
 
 public class LiveCardService extends Service {
@@ -46,7 +47,7 @@ public class LiveCardService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
 
         if (mLiveCard == null) {
-            ClassRecorderApplication.setLectureStartTime(System.currentTimeMillis());
+            GlassRecorderApplication.setLectureStartTime(System.currentTimeMillis());
 
             Log.d(TAG, "creating new live card");
             mLiveCard = new LiveCard(this, LIVE_CARD_TAG);
@@ -55,7 +56,8 @@ public class LiveCardService extends Service {
             mLiveCardView.setTextViewText(R.id.app_state_text, getString(R.string.lecture_started_text));
 
             Intent menuIntent = new Intent(this, MenuActivity.class);
-            menuIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            // menuIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+            // Intent.FLAG_ACTIVITY_CLEAR_TASK);
             mLiveCard.setAction(PendingIntent.getActivity(this, 0, menuIntent, 0));
             mLiveCard.attach(this);
             mLiveCard.publish(PublishMode.REVEAL);
@@ -128,6 +130,10 @@ public class LiveCardService extends Service {
                     stopRecording();
                     RestService.getInstance().createLecture(
                             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM) + "/audio.3gp");
+                    for (ImageInfo info : GlassRecorderApplication.getAllImages()) {
+                        RestService.getInstance().addPhoto(info.getPath(), info.getOffset());
+                    }
+                    GlassRecorderApplication.reset();
                     LiveCardService.this.stopSelf();
                 } else if (msg.arg1 == START) { // TODO: add cases for start
                     startRecording();
