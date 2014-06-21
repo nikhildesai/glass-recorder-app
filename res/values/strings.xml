@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">ClassRecorder</string>
+    <string name="action_take_picture">Take a picture</string>
+    <string name="glass_voice_trigger">Start Note Ezee</string>
+    <string name="lecture_started_text">Recording&#8230;</string>
+    <string name="action_stop">Stop</string>
+</resources>
